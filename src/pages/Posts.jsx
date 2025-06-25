@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import axios from "axios";
+import React, { useState, useEffect, useCallback } from "react";
+import { getPosts, createPost } from "../services/postsService";
 import Loader from "../components/Loader";
 import Notification from "../components/Notification";
 import Modal from "../components/Modal";
@@ -12,34 +12,47 @@ const Posts = () => {
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState("");
   const [modalPost, setModalPost] = useState(null);
+  const [allLoaded, setAllLoaded] = useState(false);
 
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
 
-  useEffect(() => {
-    loadPosts(1);
-  }, []);
+  const loadPosts = useCallback(async (pageToLoad) => {
+    if (allLoaded) return;
 
-  async function loadPosts(pageToLoad) {
     setLoading(true);
 
     try {
-      const res = await axios.get(
-        `https://jsonplaceholder.typicode.com/posts?_start=${(pageToLoad - 1) * POSTS_PER_PAGE}&_limit=${POSTS_PER_PAGE}`,
-      );
-      setPosts((prev) => [...prev, ...res.data]);
+      const start = (pageToLoad - 1) * POSTS_PER_PAGE;
+      const newPosts = await getPosts(start, POSTS_PER_PAGE);
+
+      if (newPosts.length < POSTS_PER_PAGE) {
+        setAllLoaded(true);
+      }
+
+      setPosts((prev) => [...prev, ...newPosts]);
       setPage(pageToLoad + 1);
     } catch (error) {
       console.error("Помилка завантаження постів:", error);
     } finally {
       setLoading(false);
     }
-  }
+  }, [allLoaded]);
+
+  useEffect(() => {
+    loadPosts(1);
+  }, [loadPosts]);
 
   const handleDeletePost = (id, e) => {
     e.stopPropagation();
 
-    setPosts((prev) => prev.filter((post) => post.id !== id));
+    setPosts((prev) => {
+      const filtered = prev.filter((post) => post.id !== id);
+      if (filtered.length === 0) {
+        setAllLoaded(false);
+      }
+      return filtered;
+    });
     setNotification("Публікацію видалено.");
   };
 
@@ -62,12 +75,9 @@ const Posts = () => {
 
     setLoading(true);
     try {
-      const res = await axios.post(
-        "https://jsonplaceholder.typicode.com/posts",
-        newPost,
-      );
+      const res = await createPost(newPost);
 
-      setPosts((prev) => [res.data, ...prev]);
+      setPosts((prev) => [res, ...prev]);
       setNotification("Публікацію створено успішно!");
       setTitle("");
       setBody("");
@@ -104,6 +114,10 @@ const Posts = () => {
       <section>
         <h2>Публікації</h2>
         <div className="posts-list">
+          {posts.length === 0 && !loading && (
+            <p>Додайте публікації або натисніть "Завантажити ще" для отримання постів</p>
+          )}
+
           {posts.map((post, idx) => (
             <div
               key={post.id}
@@ -123,20 +137,20 @@ const Posts = () => {
             </div>
           ))}
         </div>
-        <button
-          className="load-more-btn"
-          onClick={handleLoadMore}
-          disabled={loading}
-        >
-          Завантажити ще
-        </button>
+
+        {!allLoaded && (
+          <button
+            className="load-more-btn"
+            onClick={handleLoadMore}
+            disabled={loading}
+          >
+            Завантажити ще
+          </button>
+        )}
       </section>
 
       <Loader show={loading} />
-      <Notification
-        message={notification}
-        onClose={() => setNotification("")}
-      />
+      <Notification message={notification} onClose={() => setNotification("")} />
       <Modal post={modalPost} onClose={() => setModalPost(null)} />
     </>
   );

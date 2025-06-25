@@ -5,7 +5,7 @@ import Notification from "../components/Notification";
 import Modal from "../components/Modal";
 
 const POSTS_PER_PAGE = 10;
-
+ 
 const Posts = () => {
   const [posts, setPosts] = useState([]);
   const [page, setPage] = useState(1);
